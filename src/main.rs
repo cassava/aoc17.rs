@@ -1,4 +1,5 @@
 use std::io;
+use std::io::prelude::*;
 
 extern crate clap;
 use clap::{App, Arg};
@@ -7,6 +8,17 @@ extern crate aoc;
 
 fn read_serial_number(s: &str) -> Vec<u32> {
     s.chars().filter(|c| c.is_digit(10)).map(|c| c.to_digit(10).unwrap()).collect()
+}
+
+fn read_spreadsheet_from_stdin() -> Vec<Vec<u32>> {
+    let stdin = io::stdin();
+    let lines = stdin.lock().lines();
+    let v = lines.map(|s| s.as_ref().unwrap()
+                      .split_whitespace()
+                      .map(|x| x.parse::<u32>().unwrap())
+                      .collect::<Vec<u32>>())
+        .collect::<Vec<Vec<u32>>>();
+    v
 }
 
 fn day1() {
@@ -19,6 +31,14 @@ fn day1() {
 
     println!(" -> (a) {}", aoc::inverse_captcha(v.iter(), 1));
     println!(" -> (b) {}", aoc::inverse_captcha(v.iter(), v.len() / 2));
+}
+
+fn day2() {
+    println!("Day 2: the spreadsheet checksum.");
+    println!(" -> reading from stdin");
+    let v = read_spreadsheet_from_stdin();
+    println!(" -> (a) {}", aoc::spreadsheet_checksum(v.iter()));
+    println!(" -> (b) {}", aoc::spreadsheet_checksum_div(v.iter()));
 }
 
 fn main() {
@@ -35,6 +55,7 @@ fn main() {
     let day = day.parse::<u32>().unwrap_or(0);
     match day {
         1 => day1(),
+        2 => day2(),
         _ => println!("Unknown day, try something between 1 and 2."),
     }
 }
