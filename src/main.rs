@@ -6,8 +6,31 @@ use clap::{App, Arg};
 
 extern crate aoc;
 
-fn read_serial_number(s: &str) -> Vec<u32> {
-    s.chars().filter(|c| c.is_digit(10)).map(|c| c.to_digit(10).unwrap()).collect()
+fn main() {
+    let matches = App::new("Advent of Code 2017")
+        .version("0.2.0")
+        .author("Ben Morgan <neembi@gmail.com")
+        .arg(Arg::with_name("DAY")
+             .required(true)
+             .help("Which day to run")
+             .index(1))
+        .get_matches();
+
+    let day = matches.value_of("DAY").unwrap();
+    let day = day.parse::<u32>().unwrap_or(0);
+    match day {
+        1 => day1(),
+        2 => day2(),
+        _ => println!("Unknown day, try something between 1 and 2."),
+    }
+}
+
+fn day2() {
+    println!("Day 2: the spreadsheet checksum.");
+    println!(" -> reading from stdin");
+    let v = read_spreadsheet_from_stdin();
+    println!(" -> (a) {}", aoc::spreadsheet_checksum(v.iter()));
+    println!(" -> (b) {}", aoc::spreadsheet_checksum_div(v.iter()));
 }
 
 fn read_spreadsheet_from_stdin() -> Vec<Vec<u32>> {
@@ -33,29 +56,6 @@ fn day1() {
     println!(" -> (b) {}", aoc::inverse_captcha(v.iter(), v.len() / 2));
 }
 
-fn day2() {
-    println!("Day 2: the spreadsheet checksum.");
-    println!(" -> reading from stdin");
-    let v = read_spreadsheet_from_stdin();
-    println!(" -> (a) {}", aoc::spreadsheet_checksum(v.iter()));
-    println!(" -> (b) {}", aoc::spreadsheet_checksum_div(v.iter()));
-}
-
-fn main() {
-    let matches = App::new("Advent of Code 2017")
-        .version("0.2.0")
-        .author("Ben Morgan <neembi@gmail.com")
-        .arg(Arg::with_name("DAY")
-             .required(true)
-             .help("Which day to run")
-             .index(1))
-        .get_matches();
-
-    let day = matches.value_of("DAY").unwrap();
-    let day = day.parse::<u32>().unwrap_or(0);
-    match day {
-        1 => day1(),
-        2 => day2(),
-        _ => println!("Unknown day, try something between 1 and 2."),
-    }
+fn read_serial_number(s: &str) -> Vec<u32> {
+    s.chars().filter(|c| c.is_digit(10)).map(|c| c.to_digit(10).unwrap()).collect()
 }
