@@ -1,5 +1,6 @@
 use std::io;
 use std::io::prelude::*;
+use std::collections::HashMap;
 
 extern crate clap;
 use clap::{App, Arg};
@@ -21,8 +22,34 @@ fn main() {
     match day {
         1 => day1(),
         2 => day2(),
+        3 => day3(),
         _ => println!("Unknown day, try something between 1 and 2."),
     }
+}
+
+fn day3() {
+    println!("Day 3: the spiral memory challenge.");
+    println!(" -> reading number from stdin");
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    let n = input.trim().parse::<u32>().unwrap();
+    println!(" -> (a) {}", aoc::SpiralPoint::new(n - 1).manhattan_distance_from_origin());
+
+    // Perform the stress test.
+    // TODO: this is super-inefficient!
+    let mut i = 1;
+    let mut memory = HashMap::new();
+    memory.insert(aoc::SpiralPoint::new(0), 1);
+    let sum = loop {
+        let p = aoc::SpiralPoint::new(i);
+        let sum = p.neighbours().iter().fold(0, |acc, x| if let Some(v) = memory.get(x) { acc + v } else { acc });
+        memory.insert(p, sum);
+        if sum > n {
+            break sum;
+        }
+        i += 1;
+    };
+    println!(" -> (b) {}", sum);
 }
 
 fn day2() {
