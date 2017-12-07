@@ -9,7 +9,7 @@ extern crate aoc;
 
 fn main() {
     let matches = App::new("Advent of Code 2017")
-        .version("0.4.0")
+        .version("0.6.0")
         .author("Ben Morgan <neembi@gmail.com")
         .arg(Arg::with_name("DAY")
              .required(true)
@@ -25,8 +25,31 @@ fn main() {
         3 => day3(),
         4 => day4(),
         5 => day5(),
+        6 => day6(),
         _ => println!("Unknown day, try something between 1 and 2."),
     }
+}
+
+fn day6() {
+    println!("Day 6: the memory balance challenge.");
+    println!(" -> reading line from stdin");
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    let nums: Vec<u32> = input.split_whitespace().map(|x| x.parse::<u32>().unwrap()).collect();
+    let mut mem = aoc::memory::Memory::from_iter(nums.iter());
+
+    let mut count = 0;
+    println!("Balancing:");
+    while !mem.is_known() {
+        mem.balance();
+        println!(" -> {}", mem);
+        count += 1;
+    }
+
+    println!("Answer:");
+    println!(" -> (a) {}", count);
+    println!(" -> (b) {}", mem.known_from().unwrap());
 }
 
 fn day5() {
