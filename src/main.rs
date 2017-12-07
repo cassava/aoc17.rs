@@ -24,8 +24,35 @@ fn main() {
         2 => day2(),
         3 => day3(),
         4 => day4(),
+        5 => day5(),
         _ => println!("Unknown day, try something between 1 and 2."),
     }
+}
+
+fn day5() {
+    println!("Day 5: the CPU jumplist challenge.");
+    println!(" -> reading lines from stdin");
+    let stdin = io::stdin();
+    let mut list = stdin
+        .lock()
+        .lines()
+        .map(|x| x.unwrap().parse::<isize>().unwrap())
+        .collect::<Vec<_>>();
+    let n = list.len() as isize;
+    let mut i = 0;
+    let mut lost = 0;
+    loop {
+        let jmp = list[i];
+        // todo: day 1 and 2
+        list[i] += if jmp >= 3 { -1 } else { 1 };
+        lost += 1;
+        if (i as isize) + jmp >= n {
+            break;
+        } else {
+            i = ((i as isize) + jmp) as usize;
+        }
+    }
+    println!(" -> (a) {}", lost);
 }
 
 fn day4() {
