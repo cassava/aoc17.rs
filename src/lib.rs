@@ -2,6 +2,7 @@ pub mod spiral;
 pub mod spreadsheet;
 pub mod passphrase;
 pub mod memory;
+pub mod tree;
 
 // Calculate the captcha result for the printer for day 1.
 // This works for part one (n=1) and part two (n=vec.len()/2).
