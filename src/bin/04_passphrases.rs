@@ -1,5 +1,17 @@
 use std::collections::hash_set::HashSet;
 
+fn day4() {
+    println!("Day 4: the passphrase challenge.");
+    println!(" -> reading lines from stdin");
+    let stdin = io::stdin();
+    let lines = stdin.lock().lines().map(|x| x.unwrap()).collect::<Vec<String>>();
+
+    let count = lines.iter().fold(0, |acc, x| if aoc::passphrase::is_valid(x.as_str()) { acc + 1 } else { acc });
+    println!(" -> (a) {}", count);
+    let count = lines.iter().fold(0, |acc, x| if aoc::passphrase::is_supervalid(x.as_str()) { acc + 1 } else { acc });
+    println!(" -> (b) {}", count);
+}
+
 pub fn is_valid(passphrase: &str) -> bool {
     let mut words = HashSet::new();
     let mut count = 0;

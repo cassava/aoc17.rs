@@ -1,11 +1,40 @@
+extern crate aoc;
+
+use std::collections::Hashmap;
+
+fn main() {
+    let mut input = aoc::ProgramInput::new(PUZZLE, INPUT);
+    println!("Day 3: {}", PUZZLE);
+
+    let n = input.to_str().parse::<u32>().unwrap();
+
+    println!(":: Answer 1 is {}", Point::new(n - 1).manhattan_distance_from_origin());
+
+    // Perform the stress test.
+    // TODO: this is super-inefficient!
+    let mut i = 1;
+    let mut memory = HashMap::new();
+    memory.insert(Point::new(0), 1);
+    let sum = loop {
+        let p = Point::new(i);
+        let sum = p.neighbours().iter().fold(0, |acc, x| if let Some(v) = memory.get(x) { acc + v } else { acc });
+        memory.insert(p, sum);
+        if sum > n {
+            break sum;
+        }
+        i += 1;
+    };
+    println!(":: Answer 2 is {}", sum);
+}
+
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct Point{
+struct Point{
     x: i32,
     y: i32,
 }
 
 impl Point {
-    pub fn new(n: u32) -> Self {
+    fn new(n: u32) -> Self {
         let mut p = Point{x: 0, y: 0};
 
         // Calculating the point in euclidean space is not really
@@ -43,12 +72,12 @@ impl Point {
         p
     }
 
-    pub fn manhattan_distance_from_origin(&self) -> u32 {
+    fn manhattan_distance_from_origin(&self) -> u32 {
         (self.x.abs() + self.y.abs()) as u32
     }
 
     // TODO: Turn this into an iterator!
-    pub fn neighbours(&self) -> Vec<Point> {
+    fn neighbours(&self) -> Vec<Point> {
         vec![
             Point{x: self.x + 1, y: self.y + 0},
             Point{x: self.x + 1, y: self.y + 1},
@@ -95,3 +124,7 @@ mod tests {
         }
     }
 }
+
+const PUZZLE: &'static str = "";
+const INPUT: &'static str = r"
+";

@@ -1,36 +1,50 @@
-pub mod spiral;
-pub mod spreadsheet;
-pub mod passphrase;
-pub mod memory;
-pub mod tree;
+use std::fs::File;
+use std::io::{self, Read};
 
-// Calculate the captcha result for the printer for day 1.
-// This works for part one (n=1) and part two (n=vec.len()/2).
-pub fn inverse_captcha<'a, I>(it: I, n: usize) -> u32
-where I: Iterator<Item = &'a u32> + std::clone::Clone {
-    let y = it.clone().cycle().skip(n);
-    it.zip(y).fold(0, |acc, (x,y)| if x == y { acc + x } else { acc })
+pub struct ProgramInput {
+    data: Option<String>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl ProgramInput {
+    pub fn new(name: &str, default: &str) -> Self {
+        let matches = App::new(name)
+            .author("Ben Morgan <neembi@gmail.com")
+            .arg(Arg::with_name("INPUT")
+                .help("Input file, use - for stdin")
+                .index(1))
+            .get_matches();
 
-    #[test]
-    fn inverse_captcha_correct_sum() {
-        let tests = vec![
-            // vector       1  n/2
-            (vec![1,1,2,2], 3, 0),
-            (vec![1,2,1,2], 0, 6),
-            (vec![1,1,1,1], 4, 4),
-            (vec![1,2,3,4], 0, 0),
-            (vec![1,1,1,2], 2, 2),
-            (vec![9,1,2,1,2,1,2,9], 9, 6),
-        ];
+        if let Some(input) = matches.value_of("INPUT") {
+            if input == "-" {
+                ProgramInput {
+                    data: None,
+                }
+            } else {
+                // Try to read input as a file.
+                let mut f = File::open(input).expect("file not found");
+                let mut contents = String::new();
+                f.read_to_string(&mut contents).expect("error reading the file");
+                ProgramInput {
+                    data: Some(contents),
+                }
+            }
+        } else {
+            ProgramInput {
+                data: Some(String::new(default)),
+            }
+        }
+    }
 
-        for t in tests {
-            assert_eq!(inverse_captcha(t.0.iter(), 1), t.1);
-            assert_eq!(inverse_captcha(t.0.iter(), t.0.len()/2), t.2);
+    pub fn to_str(&mut self) -> &str {
+        if let Some(s) = self.data {
+            s.as_str()
+        } else {
+            // Try to read input from stdin.
+            println!(":: Reading from stdin...");
+            let mut buffer = String::new();
+            io::stdin().read_to_string(&mut buffer)?;
+            self.data = Some(buffer)
+            self.data.unwrap().as_str()
         }
     }
 }

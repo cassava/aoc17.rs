@@ -1,6 +1,28 @@
 use std::collections::HashMap;
 use std::fmt;
 
+fn day6() {
+    println!("Day 6: the memory balance challenge.");
+    println!(" -> reading line from stdin");
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    let nums: Vec<u32> = input.split_whitespace().map(|x| x.parse::<u32>().unwrap()).collect();
+    let mut mem = aoc::memory::Memory::from_iter(nums.iter());
+
+    let mut count = 0;
+    println!("Balancing:");
+    while !mem.is_known() {
+        mem.balance();
+        println!(" -> {}", mem);
+        count += 1;
+    }
+
+    println!("Answer:");
+    println!(" -> (a) {}", count);
+    println!(" -> (b) {}", mem.known_from().unwrap());
+}
+
 #[derive(Debug)]
 pub struct Memory{
     banks: Vec<u32>,
