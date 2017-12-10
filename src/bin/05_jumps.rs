@@ -2,11 +2,11 @@ extern crate aoc;
 
 fn main() {
     let mut input = aoc::ProgramInput::new(PUZZLE, INPUT);
-
     println!("Day 5: {}", PUZZLE);
-    let list = input.to_str()
+
+    let mut list = input.to_str()
         .lines()
-        .map(|x| x.unwrap().parse::<isize>().unwrap())
+        .map(|x| x.parse::<isize>().unwrap())
         .collect::<Vec<_>>();
     let n = list.len() as isize;
     let mut i = 0;

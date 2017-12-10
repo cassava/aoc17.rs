@@ -1,14 +1,17 @@
+extern crate aoc;
+
 use std::collections::HashMap;
 use std::fmt;
 
-fn day6() {
-    println!("Day 6: the memory balance challenge.");
-    println!(" -> reading line from stdin");
+fn main() {
+    let mut input = aoc::ProgramInput::new(PUZZLE, INPUT);
+    println!("Day 6: {}", PUZZLE);
 
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap();
-    let nums: Vec<u32> = input.split_whitespace().map(|x| x.parse::<u32>().unwrap()).collect();
-    let mut mem = aoc::memory::Memory::from_iter(nums.iter());
+    let nums: Vec<u32> = input.to_str()
+        .split_whitespace()
+        .map(|x| x.parse::<u32>().unwrap())
+        .collect();
+    let mut mem = Memory::from_iter(nums.iter());
 
     let mut count = 0;
     println!("Balancing:");
@@ -18,20 +21,19 @@ fn day6() {
         count += 1;
     }
 
-    println!("Answer:");
-    println!(" -> (a) {}", count);
-    println!(" -> (b) {}", mem.known_from().unwrap());
+    println!(":: Answer 1 is {}", count);
+    println!(":: Answer 2 is {}", mem.known_from().unwrap());
 }
 
 #[derive(Debug)]
-pub struct Memory{
+struct Memory{
     banks: Vec<u32>,
     balanced: u32,
     history: HashMap<String, u32>,
 }
 
 impl Memory {
-    pub fn from_iter<'a, I: Iterator<Item = &'a u32>>(it: I)-> Self {
+    fn from_iter<'a, I: Iterator<Item = &'a u32>>(it: I)-> Self {
         Memory{
             banks: it.map(|x| *x).collect(),
             balanced: 0,
@@ -39,7 +41,7 @@ impl Memory {
         }
     }
 
-    pub fn balance(&mut self) {
+    fn balance(&mut self) {
         self.register();
         let (mut idx, mut max) = self.banks.iter().enumerate().fold((0, 0), |acc, x| {
             if *x.1 > acc.1 {
@@ -59,11 +61,11 @@ impl Memory {
         self.balanced += 1;
     }
 
-    pub fn is_known(&self) -> bool {
+    fn is_known(&self) -> bool {
         self.history.contains_key(&self.to_string())
     }
 
-    pub fn known_from(&self) -> Option<u32> {
+    fn known_from(&self) -> Option<u32> {
         match self.history.get(&self.to_string()) {
             Some(n) => Some(self.balanced - *n),
             None => None,
@@ -91,3 +93,8 @@ impl fmt::Display for Memory {
         write!(f, "{} ", output)
     }
 }
+
+const PUZZLE: &'static str = "Memory Reallocation";
+const INPUT: &'static str = r"
+0	5	10	0	11	14	13	4	11	8	8	7	1	4	12	11
+";

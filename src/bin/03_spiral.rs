@@ -1,6 +1,6 @@
 extern crate aoc;
 
-use std::collections::Hashmap;
+use std::collections::HashMap;
 
 fn main() {
     let mut input = aoc::ProgramInput::new(PUZZLE, INPUT);
@@ -125,6 +125,7 @@ mod tests {
     }
 }
 
-const PUZZLE: &'static str = "";
+const PUZZLE: &'static str = "Spiral Memory";
 const INPUT: &'static str = r"
+289326
 ";

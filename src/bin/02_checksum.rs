@@ -6,8 +6,7 @@ fn main() {
 
     let v = input.to_str()
         .lines()
-        .map(|s| s.as_ref().unwrap()
-                  .split_whitespace()
+        .map(|s| s.split_whitespace()
                   .map(|x| x.parse::<u32>().unwrap())
                   .collect::<Vec<u32>>())
         .collect::<Vec<Vec<u32>>>();
@@ -85,7 +84,7 @@ mod tests {
     }
 }
 
-const PUZZLE: &'static str = "";
+const PUZZLE: &'static str = "Corruption Checksum";
 const INPUT: &'static str = r"
 798	1976	1866	1862	559	1797	1129	747	85	1108	104	2000	248	131	87	95
 201	419	336	65	208	57	74	433	68	360	390	412	355	209	330	135
