@@ -2,6 +2,11 @@ extern crate aoc;
 extern crate regex;
 #[macro_use] extern crate lazy_static;
 
+use regex::Regex;
+use std::{fmt, error};
+use std::str::FromStr;
+use std::collections::HashMap;
+
 fn main() {
     let mut input = aoc::ProgramInput::new(PUZZLE, INPUT);
     println!("Day 7: {}", PUZZLE);
@@ -11,280 +16,218 @@ fn main() {
     println!(":: Answer 1 is {}", root.borrow().name());
 }
 
-mod tree {
-    use regex::Regex;
-    use std::error;
-    use std::fmt;
-    use std::str::FromStr;
-    use std::collections::HashMap;
-    use std::cell::RefCell;
-    use std::rc::{Rc, Weak};
+#[derive(Debug)]
+pub struct Node {
+    name: String,
+    weight: u32,
+    children: Vec<Node>,
+}
 
-    // A Tree contains the root node.
-    #[derive(Debug)]
-    pub struct Tree {
-        root: Rc<RefCell<Node>>,
+impl Node {
+    pub fn new(name: &str) -> Self {
+        Node{
+            name: String::from(name),
+            weight: 0,
+            children: Vec::new(),
+        }
     }
 
-    impl Tree {
-        pub fn from_iter<'a, I>(it: I) -> Result<Self, ParseNodeLineError>
-        where I: Iterator<Item = &'a str> {
-            let mut nodes = HashMap::new();
-            let mut edges = Vec::new();
-            for s in it {
-                let pn: ParsedNodeLine = s.parse()?;
-                let node = Rc::new(RefCell::new(Node::with_weight(pn.name.as_str(), pn.weight)));
-                nodes.insert(pn.name.clone(), node);
-                if !pn.children.is_empty() {
-                    edges.push(pn);
-                }
-            }
+    pub fn with_weight(name: &str, weight: u32) -> Self {
+        let mut node = Node::new(name);
+        node.weight = weight;
+        node
+    }
 
-            for pn in edges {
-                let parent = nodes.get(pn.name.as_str()).expect("parent node does not exist");
-                for c in pn.children {
-                    let child = nodes.get(c.as_str()).expect("child node does not exist");
-                    child.borrow_mut().parent = Rc::downgrade(&parent);
-                    parent.borrow_mut().children.push(child.clone());
-                }
-            }
+    pub fn from_iter<'a, I>(it: I) -> Self
+    where I: Iterator<Item = NodeDefinition> {
+        // It looks like this function may have to use unsafe to work.
+        // This is somewhat frustrating, but maybe it's just the way it is?
+        let mut nodes = HashMap::new();
+        let mut edges = Vec::new();
 
-            // Find the root of the whole tree by picking any node and working up the parents.
-            // TODO: In the future, after the loop, I should check that all entries in the map
-            // are covered by the tree, because otherwise we have a disconnected forest, and
-            // not a tree.
-            // Also, there is no guarantee that there is no cycle here. We don't enforce that
-            // and ideally we should check this for random input.
-            let mut root = nodes.values().next().expect("should be at least one node in the tree").clone();
-            loop {
-                let parent = root.borrow().parent.upgrade();
-                match parent {
-                    Some(p) => root = p,
-                    None => break,
-                }
+        for def in it {
+            nodes.insert(def.name.clone(), Node::with_weight(def.name.as_str(), def.weight));
+            if !def.children.is_empty() {
+                edges.push(def);
             }
-            Ok(Tree{
-                root: root,
+        }
+
+        // This does not work yet...
+        for def in edges {
+            let mut parent: &mut Node = nodes.get(def.name.as_str()).unwrap();
+            for c in def.children {
+                let child = nodes.get(c.as_str()).expect("child node does not exist");
+                parent.add_child(child);
+            }
+        }
+
+        // Find the root of the whole tree by picking any node and working up the parents.
+        // TODO: In the future, after the loop, I should check that all entries in the map
+        // are covered by the tree, because otherwise we have a disconnected forest, and
+        // not a tree.
+        // Also, there is no guarantee that there is no cycle here. We don't enforce that
+        // and ideally we should check this for random input.
+        let mut root = nodes.values().next().expect("should be at least one node in the tree").clone();
+        loop {
+            let parent = root.borrow().parent.upgrade();
+            match parent {
+                Some(p) => root = p,
+                None => break root,
+            }
+        }
+    }
+
+    pub fn name(&self) -> &str { self.name.as_str() }
+
+
+    pub fn has_parent(&self) -> bool {
+        self.parent.upgrade().is_some()
+    }
+
+    fn get_balance(&self) -> u32 {
+        self.weight + self.children.iter().map(|x| x.borrow().get_balance()).sum::<u32>()
+    }
+
+    fn is_balanced(&self) -> bool {
+        let mut it = self.children.iter().map(|x| x.borrow().get_balance());
+        match it.next() {
+            Some(w) => it.all(|x| x == w),
+            None => true,
+        }
+    }
+
+    fn as_refcell(&self) -> Option<Rc<RefCell<Node>>> {
+        self.parent.upgrade().map(|parent| {
+            let parent = parent.borrow(); // TODO: ugly
+            parent.children.iter().find(|x| x.borrow().name == self.name).map(|x| x.clone())
+        })
+    }
+
+    /// Returns a suggestion on how to balance the children.
+    /// This is currently super inefficient!
+    fn suggest_balance(&self) -> Option<BalanceOp> {
+        // First make sure all the children are balanced:
+        for c in &self.children {
+            let result = c.borrow().suggest_balance();
+            if result.is_some() {
+                return result;
+            }
+        }
+
+        // Now check whether it is me. This will be the
+        // case when all my siblings have different balances.
+        // This is expensive.
+        let b = self.get_balance();
+
+        if self.siblings().all(|x| x.get_balance() != b) {
+            // Ok, it's me. :-(
+            self.siblings.next().map(|x| {
+                let adjust = x.get_balance() - self.get_balance();
+                BalanceOp{
+                    node: self.as_refcell().unwrap(),
+                    weight: self.weight + adjust,
+                }
             })
         }
+        None
+    }
 
-        pub fn root(&self) -> Rc<RefCell<Node>> {
-            self.root.clone()
+    /// Returns None is this node has no parent.
+    pub fn siblings(&self) -> Iterator<Item = &Node> {
+        self.parent.upgrade().unwrap().borrow().children.iter().filter(|x| x.borrow().name() != self.name).map(|x| &x.borrow())
+    }
+}
+
+#[derive(Debug)]
+pub struct BalanceOp<'a> {
+    node: &'a Node,
+    weight: u32,
+}
+
+impl fmt::Display for BalanceOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "balance {} by modifying weight {} -> {}", node.name, node.weight, self.weight)
+    }
+}
+
+/// A temporary result used to create a new Node from a string slice.
+#[derive(Debug, PartialEq, Eq)]
+struct NodeDefinition {
+    name: String,
+    weight: u32,
+    children: Vec<String>,
+}
+
+impl FromStr for NodeDefinition {
+    type Err = ParseNodeDefinitionError;
+
+    /// Parses a node.
+    ///
+    /// The input is expected to have one of two forms:
+    ///
+    /// ```{.no_run}
+    /// pbga (66)
+    /// fwft (72) -> ktlj, cntj, xhth
+    /// ```
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        lazy_static! {
+            static ref RE: Regex = Regex::new(
+                r"^(?P<name>[[:alpha:]]+) \((?P<weight>\d+)\)(?: -> (?P<children>(?:[[:alpha:]]+(?:, )?)+))?$"
+            ).unwrap();
         }
-    }
 
-    #[derive(Debug)]
-    pub struct ParseNodeLineError {
-        line: String,
-    }
-
-    impl error::Error for ParseNodeLineError {
-        fn description(&self) -> &str {
-            return "cannot parse line into node";
-        }
-    }
-
-    impl fmt::Display for ParseNodeLineError {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "Cannot parse line: {}", self.line)
-        }
-    }
-
-    /// A temporary result used to create a new Node from a string slice.
-    #[derive(Debug, PartialEq, Eq)]
-    struct ParsedNodeLine {
-        name: String,
-        weight: u32,
-        children: Vec<String>,
-    }
-
-    impl FromStr for ParsedNodeLine {
-        type Err = ParseNodeLineError;
-
-        /// Parses a node.
-        ///
-        /// The input is expected to have one of two forms:
-        ///
-        /// ```{.no_run}
-        /// pbga (66)
-        /// fwft (72) -> ktlj, cntj, xhth
-        /// ```
-        fn from_str(s: &str) -> Result<Self, Self::Err> {
-            lazy_static! {
-                static ref RE: Regex = Regex::new(
-                    r"^(?P<name>[[:alpha:]]+) \((?P<weight>\d+)\)(?: -> (?P<children>(?:[[:alpha:]]+(?:, )?)+))?$"
-                ).unwrap();
+        RE.captures(s)
+            .map(|captures| {
+            Self{
+                name: String::from(captures.name("name").unwrap().as_str()),
+                weight: captures.name("weight").unwrap().as_str().parse().unwrap(),
+                children: match captures.name("children") {
+                            Some(children) => children.as_str().split(", ").map(|x| String::from(x)).collect(),
+                            None => Vec::new(),
+                        },
             }
-
-            match RE.captures(s) {
-                Some(captures) => {
-                    Ok(Self{
-                        name: String::from(captures.name("name").unwrap().as_str()),
-                        weight: captures.name("weight").unwrap().as_str().parse().unwrap(),
-                        children: match captures.name("children") {
-                                    Some(children) => children.as_str().split(", ").map(|x| String::from(x)).collect(),
-                                    None => Vec::new(),
-                                },
-                    })
-                },
-                None => Err(Self::Err{ line: String::from(s) }),
-            }
-        }
+            })
+            .ok_or(Self::Err{ line: String::from(s) })
     }
+}
 
-    #[derive(Debug, Clone)]
-    pub struct Node {
-        name: String,
-        weight: u32,
-        parent: Weak<RefCell<Node>>,
-        children: Vec<Rc<RefCell<Node>>>,
+#[derive(Debug)]
+pub struct ParseNodeDefinitionError {
+    line: String,
+}
+
+impl error::Error for ParseNodeDefinitionError {
+    fn description(&self) -> &str {
+        return "cannot parse line into node";
     }
+}
 
-    impl Node {
-        pub fn new(name: &str) -> Self {
-            Node{
-                name: String::from(name),
-                weight: 0,
-                parent: Weak::new(),
-                children: Vec::new(),
-            }
-        }
+impl fmt::Display for ParseNodeDefinitionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Cannot parse line: {}", self.line)
+    }
+}
 
-        pub fn name(&self) -> &str { self.name.as_str() }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        pub fn with_weight(name: &str, weight: u32) -> Self {
-            let mut node = Node::new(name);
-            node.weight = weight;
-            node
-        }
-
-        pub fn has_parent(&self) -> bool {
-            self.parent.upgrade().is_some()
-        }
-
-        fn get_balance(&self) -> u32 {
-            self.weight + self.children.iter().map(|x| x.borrow().get_balance()).sum::<u32>()
-        }
-
-        fn is_balanced(&self) -> bool {
-            let mut it = self.children.iter().map(|x| x.borrow().get_balance());
-            match it.next() {
-                Some(w) => it.all(|x| x == w),
-                None => true,
-            }
-        }
-
-        fn as_refcell(&self) -> Option<Rc<RefCell<Node>>> {
-            match self.parent.upgrade() {
-                Some(parent) => {
-                    let parent = parent.borrow(); // TODO: ugly
-                    parent.children.iter().find(|x| x.borrow().name == self.name).map(|x| x.clone())
-                },
-                None => None,
-            }
-        }
-
-        /// Returns a suggestion on how to balance the children.
-        /// This is currently super inefficient!
-        fn suggest_balance(&self) -> Option<BalanceOp> {
-            // First make sure all the children are balanced:
-            for c in &self.children {
-                let result = c.borrow().suggest_balance();
-                if result.is_some() {
-                    return result;
+    #[test]
+    fn test_parse_node_definition() {
+        let tests = vec![
+            (
+                "ehsqyyb (174) -> xtcdt, tujcuy, wiqohmb, cxdwmu",
+                NodeDefinition{
+                    name: String::from("ehsqyyb"),
+                    weight: 174,
+                    children: vec!["xtcdt", "tujcuy", "wiqohmb", "cxdwmu"]
+                        .iter().map(|x| String::from(*x)).collect(),
                 }
-            }
+            ),
+        ];
 
-            // Now check whether it is me. This will be the
-            // case when all my siblings have different balances.
-            // This is expensive.
-            let b = self.get_balance();
-            if self.siblings().all(|x| x.get_balance() != b) {
-                // Ok, it's me. :-(
-                let adjust = self.siblings().next().unwrap().get_balance() - self.get_balance();
-                return Some(
-                    BalanceOp{
-                        node: self.as_refcell().unwrap(),
-                        weight: self.weight + adjust,
-                    })
-            }
-            None
-        }
-
-        pub fn siblings(&self) -> Siblings {
-            Siblings{
-                name: self.name.as_str(),
-                parent: self.parent.upgrade(),
-                index: 0,
-            }
-        }
-    }
-
-    pub struct Siblings<'a> {
-        name: &'a str,
-        parent: Option<Rc<RefCell<Node>>>,
-        index: usize,
-    }
-
-    impl<'a> Iterator for Siblings<'a> {
-        type Item = &'a Node;
-
-        fn next(&mut self) -> Option<&'a Node> {
-            match self.parent {
-                Some(parent) => {
-                    let siblings = parent.borrow().children;
-                    if self.index < siblings.len() {
-                        return None;
-                    }
-                    self.index += 1;
-                    return Some(&siblings[self.index - 1].borrow());
-                },
-                None => None,
-            }
-        }
-    }
-
-    #[derive(Debug)]
-    pub struct BalanceOp {
-        node: Rc<RefCell<Node>>,
-        weight: u32,
-    }
-
-    impl fmt::Display for BalanceOp {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            let node = self.node.borrow();
-            // TODO: How to fix this ugly situation:
-            let parent_up = node.parent.upgrade().unwrap();
-            let parent = parent_up.borrow();
-            write!(f, "balance {} by modifying {} weight {} -> {}",
-                parent.name,  // the node cannot be root, so unwrap is safe
-                node.name,
-                node.weight,
-                self.weight)
-        }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        #[test]
-        fn test_parse_node_line() {
-            let tests = vec![
-                (
-                    "ehsqyyb (174) -> xtcdt, tujcuy, wiqohmb, cxdwmu",
-                    ParsedNodeLine{
-                        name: String::from("ehsqyyb"),
-                        weight: 174,
-                        children: vec!["xtcdt", "tujcuy", "wiqohmb", "cxdwmu"]
-                            .iter().map(|x| String::from(*x)).collect(),
-                    }
-                ),
-            ];
-
-            for t in tests {
-                assert_eq!(t.0.parse::<ParsedNodeLine>().unwrap(), t.1);
-            }
+        for t in tests {
+            assert_eq!(t.0.parse::<NodeDefinition>().unwrap(), t.1);
         }
     }
 }
