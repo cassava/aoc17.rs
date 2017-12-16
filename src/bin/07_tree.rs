@@ -11,16 +11,15 @@ fn main() {
     let mut input = aoc::ProgramInput::new(PUZZLE, INPUT);
     println!("Day 7: {}", PUZZLE);
 
-    let tree = tree::Tree::from_iter(input.to_str().lines()).unwrap();
-    let root = tree.root();
-    println!(":: Answer 1 is {}", root.borrow().name());
+    //let root = Node::from_iter(input.to_str().lines()).unwrap();
+    //println!(":: Answer 1 is {}", root.name());
 }
 
 #[derive(Debug)]
 pub struct Node {
     name: String,
     weight: u32,
-    children: Vec<Node>,
+    children: Vec<Box<Node>>,
 }
 
 impl Node {
@@ -38,103 +37,94 @@ impl Node {
         node
     }
 
-    pub fn from_iter<'a, I>(it: I) -> Self
+    pub fn from_iter<'a, I>(it: I) -> Result<Box<Self>, ParseError>
     where I: Iterator<Item = NodeDefinition> {
-        // It looks like this function may have to use unsafe to work.
-        // This is somewhat frustrating, but maybe it's just the way it is?
-        let mut nodes = HashMap::new();
-        let mut edges = Vec::new();
+        let mut nodes: HashMap<String, *mut Node> = HashMap::new();
+        let mut refs: HashMap<String, *mut Node> = HashMap::new();
+        let get_node = |key| -> Option<*mut Node> {
+            nodes.get(key).or_else(|| refs.get(key)).map(|x| *x)
+        };
+        let remove_node = |key| -> Option<*mut Node> {
+            nodes.remove(key)
+                .and_then(|x| { refs.insert(String::from(key), x); Some(x) })
+                .or_else(|| refs.get(key).map(|x| *x))
+        };
+        let cleanup_nodes = || {
+            nodes.values().for_each(|n: &*mut Node| { Box::from_raw(*n); });
+        };
 
+        // Extract all nodes from the iterator and put them into the `nodes` hash map.
+        // If a node has children, we put the definition in the `edges` vector, because
+        // the referenced children might not exist yet in the `nodes` hash map.
+        let mut edges = Vec::new();
         for def in it {
-            nodes.insert(def.name.clone(), Node::with_weight(def.name.as_str(), def.weight));
+            let ptr = Box::new(Node::with_weight(def.name.as_str(), def.weight));
+            let mut ptr = Box::into_raw(ptr);
+            nodes.insert(def.name.clone(), ptr);
             if !def.children.is_empty() {
                 edges.push(def);
             }
         }
 
-        // This does not work yet...
+        // Link the nodes together by taking children and putting them in boxes.
+        // When we do this for a child, we have to remove it from the nodes hash map
+        // and put it in the refs hash map.
+        //
+        // At the end, there should be ONE node left in hash map, which will then
+        // be the root.
         for def in edges {
-            let mut parent: &mut Node = nodes.get(def.name.as_str()).unwrap();
-            for c in def.children {
-                let child = nodes.get(c.as_str()).expect("child node does not exist");
-                parent.add_child(child);
+            let mut parent = get_node(def.name.as_str()).unwrap();
+            //                                           ^^^^^^
+            // This can't fail, because we added the parents to the hash map.
+
+            for child in def.children {
+                match remove_node(child.as_str()) {
+                    Some(node) => {
+                        (*parent).add_child(Box::from_raw(node));
+                    },
+                    None => {
+                        cleanup_nodes();
+                        return Err(ParseError::RefNotExist{
+                            from: def.name.clone(),
+                            to: String::from(child),
+                        });
+                    },
+                }
             }
         }
 
-        // Find the root of the whole tree by picking any node and working up the parents.
-        // TODO: In the future, after the loop, I should check that all entries in the map
-        // are covered by the tree, because otherwise we have a disconnected forest, and
-        // not a tree.
-        // Also, there is no guarantee that there is no cycle here. We don't enforce that
-        // and ideally we should check this for random input.
-        let mut root = nodes.values().next().expect("should be at least one node in the tree").clone();
-        loop {
-            let parent = root.borrow().parent.upgrade();
-            match parent {
-                Some(p) => root = p,
-                None => break root,
-            }
+        // At this point, the `nodes` hash map should have only one entry.
+        // Otherwise, we have a tree that is not simply connected.
+        if nodes.len() != 1 {
+            let roots = nodes.keys().map(|k| *k).collect();
+            cleanup_nodes();
+            return Err(ParseError::NotConnected{
+                roots: roots,
+            });
         }
+
+        Ok(Box::from_raw(nodes.drain().next().unwrap().1))
     }
 
     pub fn name(&self) -> &str { self.name.as_str() }
+    pub fn weight(&self) -> u32 { self.weight }
 
+    pub fn add_child(&mut self, node: Box<Node>) {
 
-    pub fn has_parent(&self) -> bool {
-        self.parent.upgrade().is_some()
     }
 
     fn get_balance(&self) -> u32 {
-        self.weight + self.children.iter().map(|x| x.borrow().get_balance()).sum::<u32>()
+        0
     }
 
     fn is_balanced(&self) -> bool {
-        let mut it = self.children.iter().map(|x| x.borrow().get_balance());
-        match it.next() {
-            Some(w) => it.all(|x| x == w),
-            None => true,
-        }
-    }
-
-    fn as_refcell(&self) -> Option<Rc<RefCell<Node>>> {
-        self.parent.upgrade().map(|parent| {
-            let parent = parent.borrow(); // TODO: ugly
-            parent.children.iter().find(|x| x.borrow().name == self.name).map(|x| x.clone())
-        })
+        false
     }
 
     /// Returns a suggestion on how to balance the children.
     /// This is currently super inefficient!
     fn suggest_balance(&self) -> Option<BalanceOp> {
-        // First make sure all the children are balanced:
-        for c in &self.children {
-            let result = c.borrow().suggest_balance();
-            if result.is_some() {
-                return result;
-            }
-        }
-
-        // Now check whether it is me. This will be the
-        // case when all my siblings have different balances.
-        // This is expensive.
-        let b = self.get_balance();
-
-        if self.siblings().all(|x| x.get_balance() != b) {
-            // Ok, it's me. :-(
-            self.siblings.next().map(|x| {
-                let adjust = x.get_balance() - self.get_balance();
-                BalanceOp{
-                    node: self.as_refcell().unwrap(),
-                    weight: self.weight + adjust,
-                }
-            })
-        }
         None
-    }
-
-    /// Returns None is this node has no parent.
-    pub fn siblings(&self) -> Iterator<Item = &Node> {
-        self.parent.upgrade().unwrap().borrow().children.iter().filter(|x| x.borrow().name() != self.name).map(|x| &x.borrow())
     }
 }
 
@@ -144,9 +134,9 @@ pub struct BalanceOp<'a> {
     weight: u32,
 }
 
-impl fmt::Display for BalanceOp {
+impl<'a> fmt::Display for BalanceOp<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "balance {} by modifying weight {} -> {}", node.name, node.weight, self.weight)
+        write!(f, "balance {} by modifying weight {} -> {}", self.node.name, self.node.weight, self.weight)
     }
 }
 
@@ -159,7 +149,7 @@ struct NodeDefinition {
 }
 
 impl FromStr for NodeDefinition {
-    type Err = ParseNodeDefinitionError;
+    type Err = ParseError;
 
     /// Parses a node.
     ///
@@ -187,24 +177,46 @@ impl FromStr for NodeDefinition {
                         },
             }
             })
-            .ok_or(Self::Err{ line: String::from(s) })
+            .ok_or(ParseError::Malformed{ line: String::from(s) })
     }
 }
 
 #[derive(Debug)]
-pub struct ParseNodeDefinitionError {
-    line: String,
-}
+pub enum ParseError {
+    // Error due to some node referring to a child that does not exist.
+    RefNotExist{
+        from: String,
+        to: String,
+    },
 
-impl error::Error for ParseNodeDefinitionError {
-    fn description(&self) -> &str {
-        return "cannot parse line into node";
+    // Error due to a malformed node definition.
+    Malformed{
+        line: String,
+    },
+
+    // Error due to tree not simply connected, i.e., has multiple roots.
+    NotConnected{
+        roots: Vec<String>,
     }
 }
 
-impl fmt::Display for ParseNodeDefinitionError {
+impl error::Error for ParseError {
+    fn description(&self) -> &str {
+        match *self {
+            ParseError::RefNotExist{..} => "reference to node does not exist",
+            ParseError::Malformed{..} => "cannot parse line into node",
+            ParseError::NotConnected{..} => "tree is not simply connected",
+        }
+    }
+}
+
+impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Cannot parse line: {}", self.line)
+        match *self {
+            ParseError::RefNotExist{ from, to } => write!(f, "reference from {} to {} does not exist", from, to),
+            ParseError::Malformed{ line } => write!(f, "cannot parse line: {}", line),
+            ParseError::NotConnected{ roots } => write!(f, "tree is not simply connected: {:?}", roots),
+        }
     }
 }
 
