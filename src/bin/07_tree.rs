@@ -11,8 +11,13 @@ fn main() {
     let mut input = aoc::ProgramInput::new(PUZZLE, INPUT);
     println!("Day 7: {}", PUZZLE);
 
-    //let root = Node::from_iter(input.to_str().lines()).unwrap();
-    //println!(":: Answer 1 is {}", root.name());
+    let iter = input.to_str().lines().map(|s| s.parse().unwrap());
+    let root = Node::from_iter(iter).unwrap();
+    println!(":: Answer 1 is {}", root.name());
+    match root.suggest_balance() {
+        Some(op) => println!(":: Answer 2 is {}", op),
+        None => println!(":: Answer 2 is none"),
+    }
 }
 
 #[derive(Debug)]
@@ -37,20 +42,21 @@ impl Node {
         node
     }
 
+    // Unsafe
+    //
+    // This function uses unsafe and might leak memory or perform a double-free.
+    // It has not been extensively tested.
     pub fn from_iter<'a, I>(it: I) -> Result<Box<Self>, ParseError>
     where I: Iterator<Item = NodeDefinition> {
         let mut nodes: HashMap<String, *mut Node> = HashMap::new();
         let mut refs: HashMap<String, *mut Node> = HashMap::new();
-        let get_node = |key| -> Option<*mut Node> {
-            nodes.get(key).or_else(|| refs.get(key)).map(|x| *x)
-        };
-        let remove_node = |key| -> Option<*mut Node> {
+        let remove_node = |nodes: &mut HashMap<String, *mut Node>, refs: &mut HashMap<String, *mut Node>, key: &str| -> Option<*mut Node> {
             nodes.remove(key)
                 .and_then(|x| { refs.insert(String::from(key), x); Some(x) })
                 .or_else(|| refs.get(key).map(|x| *x))
         };
-        let cleanup_nodes = || {
-            nodes.values().for_each(|n: &*mut Node| { Box::from_raw(*n); });
+        let cleanup_nodes = |nodes: HashMap<String, *mut Node>| {
+            nodes.values().for_each(|n: &*mut Node| unsafe { Box::from_raw(*n); });
         };
 
         // Extract all nodes from the iterator and put them into the `nodes` hash map.
@@ -59,7 +65,7 @@ impl Node {
         let mut edges = Vec::new();
         for def in it {
             let ptr = Box::new(Node::with_weight(def.name.as_str(), def.weight));
-            let mut ptr = Box::into_raw(ptr);
+            let ptr = Box::into_raw(ptr);
             nodes.insert(def.name.clone(), ptr);
             if !def.children.is_empty() {
                 edges.push(def);
@@ -73,17 +79,19 @@ impl Node {
         // At the end, there should be ONE node left in hash map, which will then
         // be the root.
         for def in edges {
-            let mut parent = get_node(def.name.as_str()).unwrap();
-            //                                           ^^^^^^
-            // This can't fail, because we added the parents to the hash map.
+            // This can't fail, because we added the parents to the hash map:
+            let parent = nodes.get(def.name.as_str())
+                .or_else(|| refs.get(def.name.as_str()))
+                .map(|x| *x)
+                .unwrap();
 
             for child in def.children {
-                match remove_node(child.as_str()) {
-                    Some(node) => {
-                        (*parent).add_child(Box::from_raw(node));
+                match remove_node(&mut nodes, &mut refs, child.as_str()) {
+                    Some(node) => unsafe {
+                        (*parent).children.push(Box::from_raw(node));
                     },
                     None => {
-                        cleanup_nodes();
+                        cleanup_nodes(nodes);
                         return Err(ParseError::RefNotExist{
                             from: def.name.clone(),
                             to: String::from(child),
@@ -96,53 +104,87 @@ impl Node {
         // At this point, the `nodes` hash map should have only one entry.
         // Otherwise, we have a tree that is not simply connected.
         if nodes.len() != 1 {
-            let roots = nodes.keys().map(|k| *k).collect();
-            cleanup_nodes();
+            let roots = nodes.keys().cloned().collect();
+            cleanup_nodes(nodes);
             return Err(ParseError::NotConnected{
                 roots: roots,
             });
         }
 
-        Ok(Box::from_raw(nodes.drain().next().unwrap().1))
+        unsafe {
+            let root_ptr = nodes.drain().next().unwrap().1;
+            Ok(Box::from_raw(root_ptr))
+        }
     }
 
     pub fn name(&self) -> &str { self.name.as_str() }
+
     pub fn weight(&self) -> u32 { self.weight }
 
-    pub fn add_child(&mut self, node: Box<Node>) {
-
+    pub fn get_balance(&self) -> u32 {
+        // TODO: Consider caching this or providing a cached variant.
+        self.children.iter().fold(self.weight(), |acc, x| acc + x.get_balance())
     }
 
-    fn get_balance(&self) -> u32 {
-        0
-    }
-
-    fn is_balanced(&self) -> bool {
-        false
+    pub fn is_balanced(&self) -> bool {
+        if self.children.is_empty() {
+            return true;
+        }
+        let mut iter = self.children.iter();
+        let target = iter.next().unwrap().get_balance();
+        iter.all(|x| x.get_balance() == target)
     }
 
     /// Returns a suggestion on how to balance the children.
-    /// This is currently super inefficient!
-    fn suggest_balance(&self) -> Option<BalanceOp> {
-        None
+    pub fn suggest_balance(&self) -> Option<BalanceOp> {
+        // I can only make suggestions for children, not for myself.
+        if self.children.is_empty() {
+            return None
+        }
+
+        self.children
+            .iter()
+            .find(|c| !c.is_balanced())
+            .and_then(|c| c.suggest_balance())
+            .or_else(|| self.get_unbalanced_child())
+    }
+
+    // Returns the unbalanced child, assuming it exists.
+    fn get_unbalanced_child(&self) -> Option<BalanceOp> {
+        let mut counts = HashMap::new();
+        self.children.iter().for_each(|x| {
+            let c = counts.entry(x.get_balance()).or_insert(0);
+            *c += 1;
+        });
+        counts.iter().max_by(|x, y| x.1.cmp(y.1)) // find the most common weight
+            .and_then(|target| { // find the child that does not equal target weight
+                self.children.iter()
+                    .find(|x| x.get_balance() != *target.0)
+                    .map(|c| {
+                        BalanceOp{
+                            node: c,
+                            weight_to: *target.0 - (c.get_balance() - c.weight()),
+                        }
+                    })
+            })
     }
 }
 
 #[derive(Debug)]
 pub struct BalanceOp<'a> {
     node: &'a Node,
-    weight: u32,
+    weight_to: u32,
 }
 
 impl<'a> fmt::Display for BalanceOp<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "balance {} by modifying weight {} -> {}", self.node.name, self.node.weight, self.weight)
+        write!(f, "balance {} by modifying weight {} -> {}", self.node.name, self.node.weight, self.weight_to)
     }
 }
 
 /// A temporary result used to create a new Node from a string slice.
 #[derive(Debug, PartialEq, Eq)]
-struct NodeDefinition {
+pub struct NodeDefinition {
     name: String,
     weight: u32,
     children: Vec<String>,
@@ -213,9 +255,9 @@ impl error::Error for ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ParseError::RefNotExist{ from, to } => write!(f, "reference from {} to {} does not exist", from, to),
-            ParseError::Malformed{ line } => write!(f, "cannot parse line: {}", line),
-            ParseError::NotConnected{ roots } => write!(f, "tree is not simply connected: {:?}", roots),
+            ParseError::RefNotExist{ ref from, ref to } => write!(f, "reference from {} to {} does not exist", from, to),
+            ParseError::Malformed{ ref line } => write!(f, "cannot parse line: {}", line),
+            ParseError::NotConnected{ ref roots } => write!(f, "tree is not simply connected: {:?}", roots),
         }
     }
 }
