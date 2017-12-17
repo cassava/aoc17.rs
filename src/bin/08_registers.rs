@@ -1,5 +1,5 @@
 /*!
-Day 8: I Heard You Like Registers
+# Day 8: I Heard You Like Registers
 
 You receive a signal directly from the CPU. Because of your recent assistance with jump
 instructions, it would like you to compute the result of a series of unusual register instructions.
@@ -30,6 +30,13 @@ doesn't have the bandwidth to tell you what all the registers are named, and lea
 determine.
 
 What is the largest value in any register after completing the instructions in your puzzle input?
+
+## Part 2
+
+To be safe, the CPU also needs to know the highest value held in any register during this process
+so that it can decide how much memory to allocate to these operations. For example, in the above
+instructions, the highest value ever held was 10 (in register `c` after the third instruction was
+evaluated).
 */
 
 extern crate aoc;
@@ -45,12 +52,18 @@ fn main() {
 
     let prog: Program = input.to_str().lines().map(|s| s.parse().unwrap()).collect();
     let mut reg = Register::new();
-    prog.iter().for_each(|x| { x.apply(&mut reg); });
-    let max = reg.iter().max_by(|x,y| x.1.cmp(y.1));
-    match max {
+    let alltime_max = prog.iter().fold(("_", 0), |max, x| {
+        match x.apply(&mut reg) {
+            Some(n) => if n > max.1 { (x.operation.left.ident(), n) } else { max },
+            None => max,
+        }
+    });
+    let current_max = reg.iter().max_by(|x,y| x.1.cmp(y.1));
+    match current_max {
         Some(max) => println!(":: Answer 1 is {}={}", max.0, max.1),
         None => println!(":: No elements found"),
     }
+    println!(":: Answer 2 is {}={}", alltime_max.0, alltime_max.1);
 }
 
 type Program = Vec<Statement>;
