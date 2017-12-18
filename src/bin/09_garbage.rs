@@ -57,6 +57,23 @@ gets a score of 1.)
 - `{{<a!>},{<a!>},{<a!>},{<ab>}}`, score of 1 + 2 = 3.
 
 What is the total score for all groups in your input?
+
+## Part Two
+
+Now, you're ready to remove the garbage.
+
+To prove you've removed it, you need to count all of the characters within the garbage. The leading
+and trailing `<` and `>` don't count, nor do any canceled characters or the `!` doing the canceling.
+
+- `<>`, 0 characters.
+- `<random characters>`, 17 characters.
+- `<<<<>`, 3 characters.
+- `<{!>}>`, 2 characters.
+- `<!!>`, 0 characters.
+- `<!!!>>`, 0 characters.
+- `<{o"i!a,<{i<a>`, 10 characters.
+
+How many non-canceled characters are within the garbage in your puzzle input?
 */
 
 extern crate aoc;
@@ -71,6 +88,7 @@ fn main() {
 
     let tok: Token = input.to_str().parse().unwrap();
     println!(":: Answer 1 is {}", tok.score());
+    println!(":: Answer 2 is {}", tok.noncanceled_garbage());
 }
 
 #[derive(Debug,PartialEq)]
@@ -80,6 +98,27 @@ pub enum Token {
 }
 
 impl Token {
+    pub fn group(self) -> Option<Group> {
+        match self {
+            Token::Group(g) => Some(g),
+            _ => None,
+        }
+    }
+
+    pub fn garbage(self) -> Option<Garbage> {
+        match self {
+            Token::Garbage(g) => Some(g),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        match *self {
+            Token::Group(ref g) => g.data.as_str(),
+            Token::Garbage(ref g) => g.data.as_str(),
+        }
+    }
+
     pub fn score(&self) -> usize {
         self._score(1)
     }
@@ -88,6 +127,13 @@ impl Token {
         match *self {
             Token::Group(ref g) => g.children.iter().fold(depth, |acc, x| acc + x._score(depth + 1)),
             Token::Garbage(_) => 0,
+        }
+    }
+
+    pub fn noncanceled_garbage(&self) -> usize {
+        match *self {
+            Token::Group(ref g) => g.children.iter().fold(0, |acc, x| acc + x.noncanceled_garbage()),
+            Token::Garbage(ref g) => g.noncanceled,
         }
     }
 
@@ -159,12 +205,14 @@ impl Group {
 #[derive(Debug,PartialEq)]
 pub struct Garbage {
     data: String,
+    noncanceled: usize,
 }
 
 impl Garbage {
     fn parse(chars: &mut str::CharIndices, start: usize) -> Result<Self, ParseError> {
         let data = chars.as_str();
         let mut me = String::from("<");
+        let mut uncanceled = 0;
         while let Some((n, c)) = chars.next() {
             match c {
                 '!' => {
@@ -175,10 +223,15 @@ impl Garbage {
 
                 '>' => {
                     me.push_str(&data[..(n-start)]); // FIXME!
-                    return Ok(Self{ data: me });
+                    return Ok(Self{
+                        data: me,
+                        noncanceled: uncanceled,
+                    });
                 }
 
-                _ => {}
+                _ => {
+                    uncanceled += 1;
+                }
             }
         }
         me.push_str(data);
@@ -194,6 +247,7 @@ pub struct ParseError {
 }
 
 impl ParseError {
+    #[allow(unused)]
     fn new(data: &str, msg: &'static str) -> Self {
         Self {
             msg: msg,
@@ -246,24 +300,27 @@ mod tests {
         ];
 
         for t in tests {
-            let tok = t.parse::<Token>();
-            assert!(tok.is_ok());
-            assert_eq!(tok.unwrap(), Token::Garbage(Garbage{ data: String::from(t) }));
+            let tok: Token = t.parse().unwrap();
+            assert_eq!(tok.as_str(), t);
         }
     }
 
     #[test]
-    fn test_groups() {
+    fn test_uncanceled_garbage() {
         let tests = vec![
-            ("{}", 1),
-            ("{{{}}}", 3),
-            ("{{},{}}", 3),
-            ("{{{},{},{{}}}}", 6),
-            ("{<{},{},{{}}>}", 1),
-            ("{<a>,<a>,<a>,<a>}", 1),
-            ("{{<a>},{<a>},{<a>},{<a>}}", 5),
-            ("{{<!>},{<!>},{<!>},{<a>}}", 2),
+            ("<>", 0),
+            ("<random characters>", 17),
+            ("<<<<>", 3),
+            ("<{!>}>", 2),
+            ("<!!>", 0),
+            ("<!!!>>", 0),
+            ("<{o\"i!a,<{i<a>", 10),
         ];
+
+        for t in tests {
+            let tok: Token = t.0.parse().unwrap();
+            assert_eq!(tok.noncanceled_garbage(), t.1);
+        }
     }
 
     #[test]
