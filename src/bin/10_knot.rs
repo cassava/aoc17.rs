@@ -140,7 +140,7 @@ fn main() {
 }
 
 /// Returns the Knot Hash of the input string.
-fn hash64(s: &str) -> String {
+pub fn hash64(s: &str) -> String {
     const HASH_SIZE: usize = 256;
     const BLOCK_SIZE: usize = 16;
     const MAGIC_SALT: [usize;5] = [17, 31, 73, 47, 23];
@@ -180,7 +180,7 @@ fn hash_step(list: &mut [usize], ops: &[usize], pos: &mut usize, skip: &mut usiz
     }
 }
 
-// This is super inefficient!
+// TODO: Make this conversion much more efficient!
 fn to_hex_string(input: &[u8]) -> String {
     let mut s = String::new();
     for x in input {
