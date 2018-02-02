@@ -1,3 +1,5 @@
+pub mod knot;
+
 extern crate clap;
 use clap::{App, Arg};
 

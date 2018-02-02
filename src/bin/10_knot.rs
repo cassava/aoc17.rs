@@ -125,6 +125,8 @@ input? Ignore any leading or trailing whitespace you might encounter.
 
 extern crate aoc;
 
+use aoc::knot;
+
 fn main() {
     let mut input = aoc::ProgramInput::new(PUZZLE, INPUT);
     println!("Day 10: {}", PUZZLE);
@@ -134,126 +136,9 @@ fn main() {
         .map(|s| s.parse().expect("input should contain comma-separated digits"))
         .collect();
     let mut list: Vec<usize> = (0..256).collect();
-    hash(list.as_mut_slice(), ops.as_slice(), 1);
+    knot::hash_ops(list.as_mut_slice(), ops.as_slice(), 1);
     println!(":: Answer 1 is {}", list[0] * list[1]);
-    println!(":: Answer 2 is {}", hash64(input.to_str()));
-}
-
-/// Returns the Knot Hash of the input string.
-pub fn hash64(s: &str) -> String {
-    const HASH_SIZE: usize = 256;
-    const BLOCK_SIZE: usize = 16;
-    const MAGIC_SALT: [usize;5] = [17, 31, 73, 47, 23];
-    const ROUNDS: usize = 64;
-
-    let mut list: Vec<usize> = (0..HASH_SIZE).collect();
-    let mut ops: Vec<usize> = s.bytes().map(|x| x as usize).collect();
-    MAGIC_SALT.iter().for_each(|x| ops.push(*x));
-    hash(list.as_mut_slice(), ops.as_slice(), ROUNDS);
-
-    let mut hexes = [0;BLOCK_SIZE];
-    for i in 0..HASH_SIZE/BLOCK_SIZE {
-        // Compress and add to the new list
-        let start = i*BLOCK_SIZE;
-        let end = start + BLOCK_SIZE;
-        hexes[i] = list[start..end].iter().fold(0, |acc, x| acc ^ x) as u8;
-    }
-
-    to_hex_string(&hexes)
-}
-
-fn hash(list: &mut [usize], ops: &[usize], rounds: usize) {
-    let mut pos = 0;
-    let mut skip = 0;
-    for _ in 0..rounds {
-        hash_step(list, ops, &mut pos, &mut skip);
-    }
-}
-
-fn hash_step(list: &mut [usize], ops: &[usize], pos: &mut usize, skip: &mut usize) {
-    let n = list.len();
-
-    for &len in ops {
-        reverse(list, *pos, len);
-        *pos = (*pos + len + *skip) % n;
-        *skip += 1;
-    }
-}
-
-// TODO: Make this conversion much more efficient!
-fn to_hex_string(input: &[u8]) -> String {
-    let mut s = String::new();
-    for x in input {
-        let xs = format!("{:x}", x);
-        if xs.len() == 1 {
-            s.push('0');
-        }
-        s.push_str(xs.as_str());
-    }
-    s
-}
-
-fn reverse(list: &mut [usize], mut pos: usize, length: usize) {
-    assert!(length <= list.len());
-
-    let n = list.len();
-    if pos + length <= n {
-        list[pos..pos+length].reverse();
-    } else {
-        let mut end = (pos + length - 1) % n;
-        for _ in 0..length/2 {
-            let tmp = list[end];
-            list[end] = list[pos];
-            list[pos] = tmp;
-            end = (end + n - 1) % n;
-            pos = (pos + 1) % n;
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_reverse() {
-        let tests = vec![
-            ((0..5), 0, 0, [0,1,2,3,4]),
-            ((0..5), 0, 1, [0,1,2,3,4]),
-            ((0..5), 0, 5, [4,3,2,1,0]),
-            ((0..5), 3, 4, [4,3,2,1,0]),
-            ((0..5), 4, 2, [4,1,2,3,0]),
-            ((0..5), 1, 5, [1,0,4,3,2]),
-        ];
-
-        for t in tests {
-            let mut vec: Vec<usize> = t.0.collect();
-            reverse(vec.as_mut_slice(), t.1, t.2);
-            assert_eq!(vec.as_slice(), &t.3, "reverse({:?}, {}, {}) != {:?}", (0..5), t.1, t.2, &t.3);
-        }
-    }
-
-    #[test]
-    fn test_hash() {
-        let mut list: Vec<_> = (0..5).collect();
-        let ops = [3,4,1,5];
-        hash(list.as_mut_slice(), &ops, 1);
-        assert_eq!(list[0] * list[1], 12);
-    }
-
-    #[test]
-    fn test_hash64() {
-        let tests = vec![
-            ("", "a2582a3a0e66e6e86e3812dcb672a272"),
-            ("AoC 2017", "33efeb34ea91902bb2f59c9920caa6cd"),
-            ("1,2,3", "3efbe78a8d82f29979031a4aa0b16a9d"),
-            ("1,2,4", "63960835bcdc130f0b66d7ff4f6a5a8e"),
-        ];
-
-        for t in tests {
-            assert_eq!(hash64(t.0), t.1);
-        }
-    }
+    println!(":: Answer 2 is {}", knot::hash(input.to_str()));
 }
 
 const PUZZLE: &'static str = "Knot Hash";
