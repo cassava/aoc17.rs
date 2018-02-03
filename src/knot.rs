@@ -144,7 +144,7 @@ encounter.
 pub fn hash(s: &str) -> String {
     const HASH_SIZE: usize = 256;
     const BLOCK_SIZE: usize = 16;
-    const MAGIC_SALT: [usize;5] = [17, 31, 73, 47, 23];
+    const MAGIC_SALT: [usize; 5] = [17, 31, 73, 47, 23];
     const ROUNDS: usize = 64;
 
     let mut list: Vec<usize> = (0..HASH_SIZE).collect();
@@ -152,10 +152,10 @@ pub fn hash(s: &str) -> String {
     MAGIC_SALT.iter().for_each(|x| ops.push(*x));
     hash_ops(list.as_mut_slice(), ops.as_slice(), ROUNDS);
 
-    let mut hexes = [0;BLOCK_SIZE];
-    for i in 0..HASH_SIZE/BLOCK_SIZE {
+    let mut hexes = [0; BLOCK_SIZE];
+    for i in 0..HASH_SIZE / BLOCK_SIZE {
         // Compress and add to the new list
-        let start = i*BLOCK_SIZE;
+        let start = i * BLOCK_SIZE;
         let end = start + BLOCK_SIZE;
         hexes[i] = list[start..end].iter().fold(0, |acc, x| acc ^ x) as u8;
     }
@@ -200,10 +200,10 @@ fn reverse(list: &mut [usize], mut pos: usize, length: usize) {
 
     let n = list.len();
     if pos + length <= n {
-        list[pos..pos+length].reverse();
+        list[pos..pos + length].reverse();
     } else {
         let mut end = (pos + length - 1) % n;
-        for _ in 0..length/2 {
+        for _ in 0..length / 2 {
             let tmp = list[end];
             list[end] = list[pos];
             list[pos] = tmp;
@@ -220,25 +220,33 @@ mod tests {
     #[test]
     fn test_reverse() {
         let tests = vec![
-            ((0..5), 0, 0, [0,1,2,3,4]),
-            ((0..5), 0, 1, [0,1,2,3,4]),
-            ((0..5), 0, 5, [4,3,2,1,0]),
-            ((0..5), 3, 4, [4,3,2,1,0]),
-            ((0..5), 4, 2, [4,1,2,3,0]),
-            ((0..5), 1, 5, [1,0,4,3,2]),
+            ((0..5), 0, 0, [0, 1, 2, 3, 4]),
+            ((0..5), 0, 1, [0, 1, 2, 3, 4]),
+            ((0..5), 0, 5, [4, 3, 2, 1, 0]),
+            ((0..5), 3, 4, [4, 3, 2, 1, 0]),
+            ((0..5), 4, 2, [4, 1, 2, 3, 0]),
+            ((0..5), 1, 5, [1, 0, 4, 3, 2]),
         ];
 
         for t in tests {
             let mut vec: Vec<usize> = t.0.collect();
             reverse(vec.as_mut_slice(), t.1, t.2);
-            assert_eq!(vec.as_slice(), &t.3, "reverse({:?}, {}, {}) != {:?}", (0..5), t.1, t.2, &t.3);
+            assert_eq!(
+                vec.as_slice(),
+                &t.3,
+                "reverse({:?}, {}, {}) != {:?}",
+                (0..5),
+                t.1,
+                t.2,
+                &t.3
+            );
         }
     }
 
     #[test]
     fn test_hash() {
         let mut list: Vec<_> = (0..5).collect();
-        let ops = [3,4,1,5];
+        let ops = [3, 4, 1, 5];
         hash_ops(list.as_mut_slice(), &ops, 1);
         assert_eq!(list[0] * list[1], 12);
     }

@@ -15,14 +15,18 @@ impl ProgramInput {
     pub fn new(name: &str, default: &str) -> Self {
         let matches = App::new(name)
             .author("Ben Morgan <neembi@gmail.com")
-            .arg(Arg::with_name("INPUT")
-                .help("Input file, use - for stdin")
-                .index(1))
-            .arg(Arg::with_name("verbose")
-                 .short("v")
-                 .long("verbose")
-                 .multiple(true)
-                 .help("Print the default input used"))
+            .arg(
+                Arg::with_name("INPUT")
+                    .help("Input file, use - for stdin")
+                    .index(1),
+            )
+            .arg(
+                Arg::with_name("verbose")
+                    .short("v")
+                    .long("verbose")
+                    .multiple(true)
+                    .help("Print the default input used"),
+            )
             .get_matches();
 
         if let Some(input) = matches.value_of("INPUT") {
@@ -36,7 +40,8 @@ impl ProgramInput {
                 // Try to read input as a file.
                 let mut f = File::open(input).expect("file not found");
                 let mut contents = String::new();
-                f.read_to_string(&mut contents).expect("error reading the file");
+                f.read_to_string(&mut contents)
+                    .expect("error reading the file");
                 ProgramInput {
                     data: Some(contents),
                     print: matches.occurrences_of("verbose") > 1,

@@ -281,7 +281,7 @@ mod tests {
 
     #[test]
     fn test_regions() {
-        let mut disk = Disk::from("flqrgnkx");
+        let disk = Disk::from("flqrgnkx");
         let regions = disk.regions();
         println!("\n{}", disk);
         assert_eq!(regions, 1242);
