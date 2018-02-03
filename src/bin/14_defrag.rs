@@ -241,6 +241,7 @@ impl fmt::Display for Disk {
     }
 }
 
+#[allow(unused)]
 fn neighbours_wrapping(block_size: usize, (row, col): (usize, usize)) -> Vec<(usize, usize)> {
     vec![
         ((row - 1) % block_size, col),
