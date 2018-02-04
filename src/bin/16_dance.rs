@@ -1,5 +1,5 @@
 /*!
-Day 16: Permutation Promenade
+# Day 16: Permutation Promenade
 
 You come upon a very unusual sight; a group of programs here appear to be
 dancing.
