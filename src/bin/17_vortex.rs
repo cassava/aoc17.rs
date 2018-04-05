@@ -84,6 +84,7 @@ fn main() {
 
     let steps: usize = input.to_str().parse().unwrap();
 
+    // FIXME: This code does not work for any number. I'm also not sure whether it can.
     println!(":: Answer 1 is {}", whirlwind_next(steps, 2017));
     println!(
         ":: Answer 2 is {}",
